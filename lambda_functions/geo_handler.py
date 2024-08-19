@@ -94,7 +94,7 @@ def process_job(event,context):
             # run metrics
             
             model = job['modelType']
-            result = access_parser.run_all_metrics(job['modelType'])
+            result = access_parser.run_all_metrics(job['modelType'], job['capacityColumn'])
 
             logger.info("Saving result")
 

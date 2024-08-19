@@ -26,7 +26,7 @@ const ModelSelectionSectionComponent: React.FC<
                 labelId="travel-mode-label"
                 id="model-selection"
                 value={modelType}
-                defaultValue={"RAMM"}
+                defaultValue={"raam"}
                 label="Model Selection (Advanced)"
                 onChange={(e) => {
                   onUpdate({
@@ -34,8 +34,8 @@ const ModelSelectionSectionComponent: React.FC<
                   });
                 }}
               >
-                <MenuItem value={"RAMM"}>Rational agent access model (Default)</MenuItem>
-                <MenuItem value={"2FC"}>Two-stage floating catchment area access score</MenuItem>
+                <MenuItem value={"raam"}>Rational agent access model (Default)</MenuItem>
+                <MenuItem value={"2sfca"}>Two-stage floating catchment area access score</MenuItem>
               </Select>
             </FormControl>
       </FormGroup>
@@ -51,7 +51,7 @@ const AdditionalDescription: React.FC<{job:Job}> = ({job}) => {
 const canProgress = (_job: Job) => true;
 const shouldShow = (job: Job, step: number) => step > 2 && !!job.includeModelMetrics
 const prompt = (_job: Job) => "Model Selection";
-const tooltip = (_job: Job) => "There are two access models currently available. Advanced users may select between a RAMM and 2FC model. You can probably leave this as the default.";
+const tooltip = (_job: Job) => "There are two access models currently available. Advanced users may select between a RAAM and 2SFCA model. You can probably leave this as the default.";
 
 const ModelSelectionSection = {
     component: ModelSelectionSectionComponent,

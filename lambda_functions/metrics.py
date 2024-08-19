@@ -6,6 +6,7 @@ from typing import List, Union
 from access import Access, weights, Datasets
 import boto3
 import os
+import traceback
 import fsspec
 
 def dfToGdf(df, lon, lat, crs='EPSG:4326'):
@@ -214,12 +215,13 @@ class AccessMetricParser:
         # what is zcta510 column is zip?
         try:
             self.geographies = self.geographies.merge(
-            self.population_data,
-            how="left",
-            left_on=self.geo_join_col, # based on this. self should have a GEOID (census contract) column or a ZIP (zip) column
-            right_on=self.population_join_col
-        )
+                self.population_data,
+                how="left",
+                left_on=self.geo_join_col, # based on this. self should have a GEOID (census contract) column or a ZIP (zip) column
+                right_on=self.population_join_col
+            )
         except Exception as e: print(f" Error in self.geographies.merge : {e} ") # 'zip' error is here
+        self.geographies[population_data_col] = self.geographies[population_data_col].astype('int64')  # require it be an int
         print(f"now self.geographies is {self.geographies.head()}")
 
     def set_travel_threshold(self, threshold: int) -> None:
@@ -298,43 +300,68 @@ class AccessMetricParser:
           .rename(columns={self.matrix_travel_cost_col: f"count in {self.travel_threshold}"})
         return count_within_threshold[count_within_threshold[self.matrix_join_col_o].isin(self.valid_origins)]
 
-    def initialize_access(self) -> Access:
-        self.access = Access(
-                      demand_df = self.geographies, 
-                      demand_index = self.geo_join_col, 
-                      demand_value = self.population_data_col,
-                      supply_df    = self.destinations, 
-                      supply_index = self.destinations_geoid_col,
-                      cost_df      = self.transit_matrix, 
-                      cost_origin  = self.matrix_join_col_o, 
-                      cost_dest    = self.matrix_join_col_d,
-                      cost_name    = self.matrix_travel_cost_col
-                    )
-        return self.access
+    def initialize_access(self, capacityColumn=None) -> Access:
+        print(f"In initialize access, capacity column is {capacityColumn}")
+        print("dtypes of geographies")
+        print(self.geographies.dtypes)
+        if capacityColumn is None:
+            
+            self.access = Access(
+                        demand_df = self.geographies, 
+                        demand_index = self.geo_join_col, 
+                        demand_value = self.population_data_col,
+                        supply_df    = self.destinations, 
+                        supply_index = self.destinations_geoid_col,
+                        cost_df      = self.transit_matrix, 
+                        cost_origin  = self.matrix_join_col_o, 
+                        cost_dest    = self.matrix_join_col_d,
+                        cost_name    = self.matrix_travel_cost_col
+                        )
+            print(self.access.__dict__)
+            return self.access
+        else:
+            self.access = Access(
+                        demand_df = self.geographies, 
+                        demand_index = self.geo_join_col, 
+                        demand_value = self.population_data_col,
+                        supply_df    = self.destinations, 
+                        supply_index = self.destinations_geoid_col,
+                        supply_value = capacityColumn,
+                        cost_df      = self.transit_matrix, 
+                        cost_origin  = self.matrix_join_col_o, 
+                        cost_dest    = self.matrix_join_col_d,
+                        cost_name    = self.matrix_travel_cost_col
+                        )
+            print(self.access.__dict__)
+            return self.access
 
 
-    def analyze_raam(self,initialize_access=False) -> pd.DataFrame:
+    def analyze_raam(self, capacityColumn, initialize_access=False) -> pd.DataFrame:
+        print("entered analyzing raam")
         if (initialize_access):
-            self.initialize_access()
+            self.initialize_access(capacityColumn=capacityColumn)
           
         if self.access is None:
             print('Error - initialize access with .initialize_access() or pass initialize_access=True to analyize_gravity')
             return None
-
-        result = self.access.raam(tau=30)
+        print("running raam")
+        try:
+            result = self.access.raam(tau=30)
+        except Exception:
+            print(traceback.format_exc())
         return result.reset_index()
 
 
 
-    def analyze_2SFC(self, initialize_access=False) -> pd.DataFrame:
+    def analyze_2SFC(self, capacityColumn, initialize_access=False) -> pd.DataFrame:
         if (initialize_access):
-            self.initialize_access()
+            self.initialize_access(capacityColumn=capacityColumn)
           
         if self.access is None:
             print('Error - initialize access with .initialize_access() or pass initialize_access=True to analyize_gravity')
             return None
 
-        result = self.access.two_stage_fca(name="2sfca")
+        result = self.access.two_stage_fca(name="2sfca", max_cost=self.travel_threshold)
         return result.reset_index()
     
     def analyze_gravity(self, initialize_access=False) -> pd.DataFrame: 
@@ -351,7 +378,7 @@ class AccessMetricParser:
         
         return gravity_result
     
-    def run_all_metrics(self, withModel=None) -> pd.DataFrame:
+    def run_all_metrics(self, withModel=None, capacityColumn=None) -> pd.DataFrame:
         ttn = self.analyze_nearest()
         print(f"ttn is {ttn.head()}")
         cwt = self.analyze_count_in_threshold()
@@ -359,9 +386,9 @@ class AccessMetricParser:
         modelResult = pd.DataFrame()
         if withModel:
             if(withModel=='raam'):
-                modelResult = self.analyze_raam(initialize_access=True)
-            elif(withModel=='2fca'):
-                modelResult = self.analyze_2SFC(initialize_access=True)
+                modelResult = self.analyze_raam(capacityColumn, initialize_access=True)
+            elif(withModel=='2sfca'):
+                modelResult = self.analyze_2SFC(capacityColumn, initialize_access=True)
         print(f"modelResult is {modelResult.head()}")
 
         result =self.geographies \
