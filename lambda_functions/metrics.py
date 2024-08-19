@@ -201,7 +201,7 @@ class AccessMetricParser:
         # self is AccessMetricParser(geo_unit='zip', transit_mode='car', matrix_join_col_o='origin', matrix_join_col_d='destination', matrix_travel_cost_col='minutes', transit_matrix=  origin  destination  minutes (DF)
         # population_join_col='', population_data_col='', coerce_geoid=True, geographies=Empty GeoDataFrame,  valid_origins=None, geo_join_col='GEOID', destinations=Empty DataFrame
 
-
+        print(f"pop columns before merging: {list(df.columns)}")
         if (self.coerce_geoid == True):
             df[population_join_col] = df[population_join_col].astype('int64')
         self.population_data = df[[population_join_col, population_data_col]]
@@ -221,7 +221,8 @@ class AccessMetricParser:
                 right_on=self.population_join_col
             )
         except Exception as e: print(f" Error in self.geographies.merge : {e} ") # 'zip' error is here
-        self.geographies[population_data_col] = self.geographies[population_data_col].astype('int64')  # require it be an int
+        self.geographies[population_data_col] = self.geographies[population_data_col].astype('float')  # require it be a float
+        print(f"There are {len(self.geographies[population_data_col].isna())/len(self.geographies)} null out rows for population")
         print(f"now self.geographies is {self.geographies.head()}")
 
     def set_travel_threshold(self, threshold: int) -> None:
